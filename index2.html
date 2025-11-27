@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Para el amor de mi vida</title>
+    <link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&family=Nunito:wght@400&display=swap" rel="stylesheet">
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            /* Fondo degradado suave */
+            background: linear-gradient(to bottom, #ffeae8, #ffd6d6);
+        }
+        #canvas {
+            display: block;
+            /* El canvas ocupará toda la pantalla para la animación */
+        }
+    </style>
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+
+        // Variables globales para dimensiones y estado
+        let width, height, floorY, centerX;
+        // Estados de la animación: 'drop' -> 'grow' -> 'bloom' -> 'text'
+        let animationState = 'drop';
+        let startTime = null;
+        
+        // Configuración de la gota
+        const dropSpeed = 5;
+        let dropY = 0;
+        
+        // Configuración del árbol
+        let treeRoot = null;
+        const growDuration = 3000; // 3 segundos para crecer
+        const bloomDuration = 2000; // 2 segundos para florecer
+
+        // Configuración del texto
+        let textIndex = 0;
+        // Texto final a mostrar. \n crea saltos de línea.
+        const fullText = "Para el amor de mi vida:\n\nSi pudiera elegir un lugar seguro,\nsería a tu lado.\nCuanto más tiempo estoy contigo\nmás te quiero.\nEres mi todo.\n\n— Siempre tuyo.";
+        const textSpeed = 50; // milisegundos por letra
+
+        // Configuración de los pétalos flotantes
+        const petals = [];
+        const numPetals = 40;
+
+        // Función para ajustar el tamaño del canvas a la ventana
+        function resize() {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+            floorY = height * 0.90; // Bajé un poco el suelo (del 85% al 90%) para dar espacio al árbol más grande
+            centerX = width / 2;
+            dropY = 0; // Reiniciar la gota arriba
+            initPetals();
+        }
+
+        // Inicializa los pétalos flotantes con propiedades aleatorias
+        function initPetals() {
+            petals.length = 0;
+            for (let i = 0; i < numPetals; i++) {
+                petals.push({
+                    x: Math.random() * width,
+                    y: Math.random() * height,
+                    size: Math.random() * 5 + 3,
+                    speedX: Math.random() * 2 - 1, // Velocidad horizontal aleatoria
+                    speedY: Math.random() * 1 + 0.5, // Velocidad de caída
+                    // Colores rosados/rojizos aleatorios
+                    color: `rgba(255, ${Math.floor(Math.random() * 100 + 100)}, ${Math.floor(Math.random() * 100 + 150)}, 0.6)`
+                });
+            }
+        }
+
+        // Clase para crear la estructura recursiva del árbol
+        class Branch {
+            constructor(x, y, length, angle, depth) {
+                this.x = x;
+                this.y = y;
+                this.length = length;
+                this.angle = angle;
+                this.depth = depth;
+                // Calcula el punto final de la rama
+                this.endX = this.x + this.length * Math.cos(this.angle);
+                this.endY = this.y + this.length * Math.sin(this.angle);
+                this.children = [];
+                this.hasLeaf = false;
+                this.leafScale = 0;
+
+                // Si aún hay profundidad, crea ramas hijas
+                if (depth > 0) {
+                    const numChildren = Math.floor(Math.random() * 2) + 2; // 2 o 3 ramas hijas
+                    for (let i = 0; i < numChildren; i++) {
+                        const newLength = this.length * (Math.random() * 0.3 + 0.6); // Más cortas
+                        // Ángulo aleatorio relativo a la rama padre (+/- 45 grados)
+                        const newAngle = this.angle + (Math.random() * Math.PI / 2 - Math.PI / 4);
+                        this.children.push(new Branch(this.endX, this.endY, newLength, newAngle, depth - 1));
+                    }
+                } else {
+                    // Es una punta, tendrá una hoja/corazón
+                    this.hasLeaf = true;
+                    // Color de hoja aleatorio entre tonos rojos y rosados
+                    this.leafColor = `hsl(${Math.random() * 60 + 330}, 90%, ${Math.random() * 30 + 50}%)`;
+                }
+            }
+
+            // Método para dibujar la rama y sus hijos
+            draw(ctx, growProgress, bloomProgress) {
+                // Calcula el largo actual basado en el progreso de crecimiento
+                const currentLength = this.length * growProgress;
+                const currentEndX = this.x + currentLength * Math.cos(this.angle);
+                const currentEndY = this.y + currentLength * Math.sin(this.angle);
+
+                // Dibuja la línea de la rama
+                ctx.beginPath();
+                ctx.moveTo(this.x, this.y);
+                ctx.lineTo(currentEndX, currentEndY);
+                // MODIFICADO: Aumenté el multiplicador de 1.2 a 1.4 para ramas un poco más gruesas
+                ctx.lineWidth = this.depth * 1.4; 
+                ctx.strokeStyle = '#6d4c41'; // Color marrón
+                ctx.stroke();
+
+                // Si la rama ya creció completamente
+                if (growProgress >= 1) {
+                    // Dibuja recursivamente a los hijos
+                    this.children.forEach(child => child.draw(ctx, growProgress, bloomProgress));
+                    
+                    // Animación de la hoja/corazón si es una punta
+                    if (this.hasLeaf) {
+                        this.leafScale = Math.min(1, this.leafScale + bloomProgress * 0.05);
+                        if(this.leafScale > 0) {
+                            this.drawHeart(ctx, this.endX, this.endY, this.leafScale * 12, this.leafColor);
+                        }
+                    }
+                }
+            }
+            
+            // Función auxiliar para dibujar un corazón
+            drawHeart(ctx, x, y, size, color) {
+                ctx.save();
+                ctx.translate(x, y);
+                ctx.fillStyle = color;
+                ctx.beginPath();
+                ctx.moveTo(0, 0);
+                // Usamos curvas de Bezier para la forma del corazón
+                ctx.bezierCurveTo(-size / 2, -size / 2, -size, size / 3, 0, size);
+                ctx.bezierCurveTo(size, size / 3, size / 2, -size / 2, 0, 0);
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        // Función principal que se ejecuta en cada frame de la animación
+        function animate(timestamp) {
+            if (!startTime) startTime = timestamp;
+            const elapsed = timestamp - startTime;
+
+            // Limpia el canvas
+            ctx.clearRect(0, 0, width, height);
+
+            // 1. Dibujar pétalos flotantes de fondo siempre
+            updateAndDrawPetals();
+
+            // 2. Dibujar la línea del suelo
+            ctx.beginPath();
+            ctx.moveTo(0, floorY);
+            ctx.lineTo(width, floorY);
+            ctx.lineWidth = 2;
+            ctx.strokeStyle = '#8d6e63';
+            ctx.stroke();
+
+            // 3. Máquina de estados para controlar la secuencia
+            switch (animationState) {
+                case 'drop':
+                    // Fase 1: Caída de la gota
+                    dropY += dropSpeed;
+                    ctx.beginPath();
+                    ctx.arc(centerX, dropY, 6, 0, Math.PI * 2);
+                    ctx.fillStyle = '#d32f2f'; // Rojo intenso
+                    ctx.fill();
+
+                    // Si toca el suelo, pasa a la siguiente fase
+                    if (dropY >= floorY) {
+                        animationState = 'grow';
+                        startTime = timestamp; // Reinicia el tiempo para la nueva fase
+                        
+                        // MODIFICADO: 
+                        // 1. Largo inicial cambiado de 110 a 150 (Más alto)
+                        // 2. Profundidad cambiada de 8 a 9 (Más detalle)
+                        treeRoot = new Branch(centerX, floorY, 150, -Math.PI / 2, 9);
+                    }
+                    break;
+
+                case 'grow':
+                    // Fase 2: Crecimiento de las ramas
+                    const growProgress = Math.min(1, (timestamp - startTime) / growDuration);
+                    treeRoot.draw(ctx, growProgress, 0); // bloomProgress es 0
+                    if (growProgress >= 1) {
+                        animationState = 'bloom';
+                        startTime = timestamp;
+                    }
+                    break;
+                
+                case 'bloom':
+                    // Fase 3: Aparición de las hojas/corazones
+                    const bloomProgress = Math.min(1, (timestamp - startTime) / bloomDuration);
+                    treeRoot.draw(ctx, 1, bloomProgress); // growProgress es 1
+                    if (bloomProgress >= 1) {
+                        animationState = 'text';
+                        startTime = timestamp;
+                    }
+                    break;
+
+                case 'text':
+                    // Fase 4: Escritura del texto final
+                    treeRoot.draw(ctx, 1, 1); // Árbol completo
+                    drawTypingText(timestamp);
+                    break;
+            }
+
+            // Solicita el siguiente frame de animación
+            requestAnimationFrame(animate);
+        }
+
+        // Actualiza y dibuja los pétalos de fondo
+        function updateAndDrawPetals() {
+            petals.forEach(p => {
+                p.y += p.speedY;
+                p.x += Math.sin(p.y * 0.01) * p.speedX; // Movimiento oscilante
+                // Si sale por abajo, vuelve a aparecer arriba
+                if (p.y > height) p.y = -10;
+                if (p.x > width) p.x = 0;
+                if (p.x < 0) p.x = width;
+
+                ctx.beginPath();
+                // Dibuja un pequeño círculo o elipse para el pétalo
+                ctx.ellipse(p.x, p.y, p.size, p.size * 0.8, Math.random(), 0, Math.PI * 2);
+                ctx.fillStyle = p.color;
+                ctx.fill();
+            });
+        }
+
+        // Dibuja el texto con efecto de máquina de escribir
+        function drawTypingText(timestamp) {
+            const timeSinceTextStart = timestamp - startTime;
+            // Calcula cuántas letras mostrar basado en el tiempo
+            textIndex = Math.min(fullText.length, Math.floor(timeSinceTextStart / textSpeed));
+            
+            const currentText = fullText.substring(0, textIndex);
+            
+            ctx.fillStyle = '#5d4037'; // Color de texto marrón oscuro
+            ctx.textAlign = 'left';
+            
+            const lines = currentText.split('\n');
+            // Posición inicial del texto (lado izquierdo)
+            let textX = width * 0.1;
+            let textY = height * 0.2;
+            const lineHeight = 32;
+
+            lines.forEach((line, index) => {
+                // La primera línea es el título, usa una fuente diferente
+                if (index === 0) {
+                      ctx.font = '700 32px "Dancing Script", cursive';
+                } else {
+                      ctx.font = '22px "Nunito", sans-serif';
+                }
+                ctx.fillText(line, textX, textY);
+                textY += lineHeight;
+            });
+        }
+        
+        // Manejar el redimensionamiento de la ventana
+        window.addEventListener('resize', resize);
+        // Iniciar todo
+        resize();
+        requestAnimationFrame(animate);
+
+    </script>
+</body>
+</html>
